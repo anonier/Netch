@@ -1,9 +1,12 @@
-using System;
+﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Net;
 using System.Text;
 using System.Threading;
+using Netch.Forms;
+using Netch.Utils;
 
 namespace Netch.Controllers
 {
@@ -31,9 +34,12 @@ namespace Netch.Controllers
         public Models.Mode SavedMode = new Models.Mode();
 
         /// <summary>
-        ///     本地 DNS 服务控制器
+        ///		本地 DNS 服务控制器
         /// </summary>
         public DNSController pDNSController = new DNSController();
+
+        // ByPassLan IP
+        List<string> BypassLanIPs = new List<string>() { "10.0.0.0/8", "172.16.0.0/16", "192.168.0.0/24" };
 
         /// <summary>
         ///     配置 TUNTAP 适配器
@@ -61,6 +67,7 @@ namespace Netch.Controllers
         /// </summary>
         public bool SetupBypass()
         {
+            MainForm.Instance.StatusText($"{Utils.i18N.Translate("Status")}{Utils.i18N.Translate(": ")}{Utils.i18N.Translate("SetupBypass")}");
             // 让服务器 IP 走直连
             foreach (var address in ServerAddresses)
             {
@@ -98,8 +105,33 @@ namespace Netch.Controllers
                 }
             }
 
+            foreach (var ip in BypassLanIPs)
+            {
+                var info = ip.Split('/');
+                var address = IPAddress.Parse(info[0]);
+
+                if (!IPAddress.IsLoopback(address))
+                {
+                    NativeMethods.CreateRoute(address.ToString(), int.Parse(info[1]), Global.Adapter.Gateway.ToString(), Global.Adapter.Index);
+                }
+            }
+
             if (SavedMode.Type == 2) // 处理仅规则内走直连
             {
+                // 将 TUN/TAP 网卡权重放到最高
+                var instance = new Process
+                {
+                    StartInfo =
+                    {
+                        FileName = "netsh",
+                        Arguments = string.Format("interface ip set interface {0} metric=0", Global.TUNTAP.Index),
+                        WindowStyle = ProcessWindowStyle.Hidden,
+                        UseShellExecute = true,
+                        CreateNoWindow = true
+                    }
+                };
+                instance.Start();
+
                 // 创建默认路由
                 if (!NativeMethods.CreateRoute("0.0.0.0", 0, Global.Settings.TUNTAP.Gateway, Global.TUNTAP.Index, 10))
                 {
@@ -140,6 +172,54 @@ namespace Netch.Controllers
                         }
                     }
                 }
+                //处理NAT类型检测，由于协议的原因，无法仅通过域名确定需要代理的IP，自己记录解析了返回的IP，仅支持默认检测服务器
+                if (Global.Settings.STUN_Server == "stun.stunprotocol.org")
+                {
+                    try
+                    {
+                        var nttAddress = Dns.GetHostAddresses(Global.Settings.STUN_Server)[0];
+                        if (int.TryParse("32", out var prefix))
+                        {
+                            NativeMethods.CreateRoute(nttAddress.ToString(), prefix, Global.Settings.TUNTAP.Gateway, Global.TUNTAP.Index);
+                        }
+                        var nttrAddress = Dns.GetHostAddresses("stunresponse.coldthunder11.com")[0];
+                        if (int.TryParse("32", out var prefixr))
+                        {
+                            NativeMethods.CreateRoute(nttrAddress.ToString(), prefixr, Global.Settings.TUNTAP.Gateway, Global.TUNTAP.Index);
+                        }
+                    }
+                    catch
+                    {
+                        Logging.Info("NAT类型测试域名解析失败，将不会被添加到代理列表。");
+                    }
+                }
+                //处理DNS代理
+                if (Global.Settings.TUNTAP.ProxyDNS)
+                {
+                    if (Global.Settings.TUNTAP.UseCustomDNS)
+                    {
+                        string dns = "";
+                        foreach (var value in Global.Settings.TUNTAP.DNS)
+                        {
+                            dns += value;
+                            dns += ',';
+                        }
+
+                        dns = dns.Trim();
+                        dns = dns.Substring(0, dns.Length - 1);
+                        if (int.TryParse("32", out var prefix))
+                        {
+                            NativeMethods.CreateRoute(dns, prefix, Global.Settings.TUNTAP.Gateway, Global.TUNTAP.Index);
+                        }
+                    }
+                    else
+                    {
+                        if (int.TryParse("32", out var prefix))
+                        {
+                            NativeMethods.CreateRoute("1.1.1.1", prefix, Global.Settings.TUNTAP.Gateway, Global.TUNTAP.Index);
+                        }
+                    }
+                }
             }
             return true;
         }
@@ -152,7 +232,7 @@ namespace Netch.Controllers
         {
             if (SavedMode.Type == 2)
             {
-                NativeMethods.DeleteRoute("0.0.0.0", 0, Global.Settings.TUNTAP.Gateway.ToString(), Global.TUNTAP.Index, 10);
+                NativeMethods.DeleteRoute("0.0.0.0", 0, Global.Settings.TUNTAP.Gateway, Global.TUNTAP.Index, 10);
 
                 foreach (var ip in SavedMode.Rule)
                 {
@@ -181,9 +261,62 @@ namespace Netch.Controllers
                         }
                     }
                 }
+                if (Global.Settings.STUN_Server == "stun.stunprotocol.org")
+                {
+                    try
+                    {
+                        var nttAddress = Dns.GetHostAddresses(Global.Settings.STUN_Server)[0];
+                        if (int.TryParse("32", out var prefix))
+                        {
+                            NativeMethods.DeleteRoute(nttAddress.ToString(), prefix, Global.Settings.TUNTAP.Gateway, Global.TUNTAP.Index);
+                        }
+                        var nttrAddress = Dns.GetHostAddresses("stunresponse.coldthunder11.com")[0];
+                        if (int.TryParse("32", out var prefixr))
+                        {
+                            NativeMethods.DeleteRoute(nttrAddress.ToString(), prefixr, Global.Settings.TUNTAP.Gateway, Global.TUNTAP.Index);
+                        }
+                    }
+                    catch { }
+                }
+                if (Global.Settings.TUNTAP.ProxyDNS)
+                {
+                    if (Global.Settings.TUNTAP.UseCustomDNS)
+                    {
+                        string dns = "";
+                        foreach (var value in Global.Settings.TUNTAP.DNS)
+                        {
+                            dns += value;
+                            dns += ',';
+                        }
+
+                        dns = dns.Trim();
+                        dns = dns.Substring(0, dns.Length - 1);
+                        if (int.TryParse("32", out var prefix))
+                        {
+                            NativeMethods.DeleteRoute(dns, prefix, Global.Settings.TUNTAP.Gateway, Global.TUNTAP.Index);
+                        }
+                    }
+                    else
+                    {
+                        if (int.TryParse("32", out var prefix))
+                        {
+                            NativeMethods.DeleteRoute("1.1.1.1", prefix, Global.Settings.TUNTAP.Gateway, Global.TUNTAP.Index);
+                        }
+                    }
+                }
             }
 
             foreach (var ip in Global.Settings.BypassIPs)
+            {
+                var info = ip.Split('/');
+                var address = IPAddress.Parse(info[0]);
+
+                if (!IPAddress.IsLoopback(address))
+                {
+                    NativeMethods.DeleteRoute(address.ToString(), int.Parse(info[1]), Global.Adapter.Gateway.ToString(), Global.Adapter.Index);
+                }
+            }
+            foreach (var ip in BypassLanIPs)
             {
                 var info = ip.Split('/');
                 var address = IPAddress.Parse(info[0]);
@@ -226,6 +359,7 @@ namespace Netch.Controllers
         /// <returns>是否成功</returns>
         public bool Start(Models.Server server, Models.Mode mode)
         {
+            MainForm.Instance.StatusText($"{Utils.i18N.Translate("Status")}{Utils.i18N.Translate(": ")}{Utils.i18N.Translate("Starting Tap")}");
             foreach (var proc in Process.GetProcessesByName("tun2socks"))
             {
                 try
@@ -255,12 +389,16 @@ namespace Netch.Controllers
             {
                 return false;
             }
-            
+
+            Logging.Info("设置绕行规则");
             SetupBypass();
+            Logging.Info("设置绕行规则完毕");
 
             Instance = new Process();
-            Instance.StartInfo.WorkingDirectory = String.Format("{0}\\bin", Directory.GetCurrentDirectory());
-            Instance.StartInfo.FileName = String.Format("{0}\\bin\\tun2socks.exe", Directory.GetCurrentDirectory());
+            Instance.StartInfo.WorkingDirectory = string.Format("{0}\\bin", Directory.GetCurrentDirectory());
+            Instance.StartInfo.FileName = string.Format("{0}\\bin\\tun2socks.exe", Directory.GetCurrentDirectory());
+            var adapterName = TUNTAP.GetName(Global.TUNTAP.ComponentID);
+            Logging.Info($"tun2sock使用适配器：{adapterName}");
 
             string dns;
             if (Global.Settings.TUNTAP.UseCustomDNS)
@@ -279,15 +417,16 @@ namespace Netch.Controllers
             {
                 pDNSController.Start();
                 dns = "127.0.0.1";
+                //dns = "1.1.1.1,1.0.0.1";
             }
 
             if (server.Type == "Socks5")
             {
-                Instance.StartInfo.Arguments = String.Format("-proxyServer {0}:{1} -tunAddr {2} -tunMask {3} -tunGw {4} -tunDns {5} -tunName \"{6}\"", server.Hostname, server.Port, Global.Settings.TUNTAP.Address, Global.Settings.TUNTAP.Netmask, Global.Settings.TUNTAP.Gateway, dns, Global.TUNTAP.Adapter.Name);
+                Instance.StartInfo.Arguments = string.Format("-proxyServer {0}:{1} -tunAddr {2} -tunMask {3} -tunGw {4} -tunDns {5} -tunName \"{6}\"", server.Hostname, server.Port, Global.Settings.TUNTAP.Address, Global.Settings.TUNTAP.Netmask, Global.Settings.TUNTAP.Gateway, dns, adapterName);
             }
             else
             {
-                Instance.StartInfo.Arguments = String.Format("-proxyServer 127.0.0.1:{0} -tunAddr {1} -tunMask {2} -tunGw {3} -tunDns {4} -tunName \"{5}\"", Global.Settings.Socks5LocalPort, Global.Settings.TUNTAP.Address, Global.Settings.TUNTAP.Netmask, Global.Settings.TUNTAP.Gateway, dns, Global.TUNTAP.Adapter.Name);
+                Instance.StartInfo.Arguments = string.Format("-proxyServer 127.0.0.1:{0} -tunAddr {1} -tunMask {2} -tunGw {3} -tunDns {4} -tunName \"{5}\"", Global.Settings.Socks5LocalPort, Global.Settings.TUNTAP.Address, Global.Settings.TUNTAP.Netmask, Global.Settings.TUNTAP.Gateway, dns, adapterName);
             }
 
             Instance.StartInfo.CreateNoWindow = true;
@@ -305,7 +444,7 @@ namespace Netch.Controllers
             Instance.BeginOutputReadLine();
             Instance.PriorityClass = ProcessPriorityClass.RealTime;
 
-            for (int i = 0; i < 1000; i++)
+            for (var i = 0; i < 1000; i++)
             {
                 Thread.Sleep(10);
 
@@ -336,8 +475,10 @@ namespace Netch.Controllers
                     Instance.Kill();
                 }
 
-                pDNSController.Stop();
+                //pDNSController.Stop();
+                //修复点击停止按钮后再启动，DNS服务没监听的BUG
                 ClearBypass();
+                pDNSController.Stop();
             }
             catch (Exception e)
             {
@@ -347,9 +488,9 @@ namespace Netch.Controllers
 
         public void OnOutputDataReceived(object sender, DataReceivedEventArgs e)
         {
-            if (!String.IsNullOrEmpty(e.Data))
+            if (!string.IsNullOrEmpty(e.Data))
             {
-                File.AppendAllText("logging\\tun2socks.log", String.Format("{0}\r\n", e.Data.Trim()));
+                File.AppendAllText("logging\\tun2socks.log", string.Format("{0}\r\n", e.Data.Trim()));
 
                 if (State == Models.State.Starting)
                 {
