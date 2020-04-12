@@ -126,14 +126,6 @@ namespace Netch.Controllers
                         {
                             enabled = server.UseMux
                         }
-                    },
-                    new Models.Information.VMess.Outbounds
-                    {
-                        tag = "direct",
-                        protocol = "freedom",
-                        settings = null,
-                        streamSettings = null,
-                        mux = null
                     }
                 },
                 routing = new Models.Information.VMess.Routing
@@ -147,7 +139,7 @@ namespace Netch.Controllers
                             {
                                 "geoip:cn",
                                 "geoip:private"
-                                
+
                             },
                             domain = new List<string>
                             {

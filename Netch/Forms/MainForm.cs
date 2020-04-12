@@ -488,6 +488,7 @@ namespace Netch.Forms
 
             if (Global.Settings.SubscribeLink.Count > 0)
             {
+                StatusLabel.Text = $"{Utils.i18N.Translate("Status")}{Utils.i18N.Translate(": ")}{Utils.i18N.Translate("Starting update subscription")}";
                 DeletePictureBox.Enabled = false;
 
                 UpdateServersFromSubscribeLinksToolStripMenuItem.Enabled = false;
@@ -571,6 +572,7 @@ namespace Netch.Forms
                         NatTypeStatusLabel.Text = "";
                     }
                     Utils.Configuration.Save();
+                    StatusLabel.Text = $"{Utils.i18N.Translate("Status")}{Utils.i18N.Translate(": ")}{Utils.i18N.Translate("Subscription updated")}";
                 }).ContinueWith(task =>
                 {
                     BeginInvoke(new Action(() =>
@@ -873,6 +875,28 @@ namespace Netch.Forms
                         }
 
                         State = Models.State.Started;
+                        if (Global.Settings.StartedTcping)
+                        {
+                            // 自动检测延迟
+                            Task.Run(() =>
+                            {
+                                while (true)
+                                {
+                                    if (State == Models.State.Started)
+                                    {
+                                        server.Test();
+                                    // 重载服务器列表
+                                    InitServer();
+
+                                        Thread.Sleep(Global.Settings.StartedTcping_Interval * 1000);
+                                    }
+                                    else
+                                    {
+                                        break;
+                                    }
+                                }
+                            });
+                        }
                     }
                     else
                     {
@@ -1016,6 +1040,10 @@ namespace Netch.Forms
                 {
                     MessageBox.Show(Utils.i18N.Translate("Please select an mode first"), Utils.i18N.Translate("Information"), MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
+                else if (ProfileNameText.Text == "")
+                {
+                    MessageBox.Show(Utils.i18N.Translate("Please enter a profile name first"), Utils.i18N.Translate("Information"), MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
                 else
                 {
                     SaveProfile(index);
@@ -1024,6 +1052,11 @@ namespace Netch.Forms
             }
             else
             {
+                if (ProfileButtons[index].Text == Utils.i18N.Translate("Error") || ProfileButtons[index].Text == Utils.i18N.Translate("None"))
+                {
+                    MessageBox.Show(Utils.i18N.Translate("No saved profile here. Save a profile first by Ctrl+Click on the button"), Utils.i18N.Translate("Information"), MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+
                 try
                 {
                     ProfileNameText.Text = LoadProfile(index);
@@ -1069,6 +1102,15 @@ namespace Netch.Forms
         public void InitProfile()
         {
             var num_profile = Global.Settings.ProfileCount;
+            if (num_profile == 0)
+            {
+                ProfileGroupBox.Size = new Size(0, 0);
+                ConfigurationGroupBox.Size -= new Size(0, 25);
+                this.Size -= new Size(0, 70 + 25);
+                configLayoutPanel.RowStyles[2].Height = 0;
+                return;
+            }
+
             ProfileTable.ColumnCount = num_profile;
 
             while (Global.Settings.profiles.Count < num_profile)
@@ -1212,7 +1254,15 @@ namespace Netch.Forms
             if (ServerComboBox.SelectedIndex != -1)
             {
                 var selectedMode = (Models.Server)ServerComboBox.SelectedItem;
-                Clipboard.SetText(Utils.ShareLink.GetShareLink(selectedMode));
+                try
+                {
+                    //听说巨硬BUG经常会炸，所以Catch一下 :D
+                    Clipboard.SetText(Utils.ShareLink.GetShareLink(selectedMode));
+                }
+                catch (Exception)
+                {
+
+                }
             }
             else
             {

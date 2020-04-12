@@ -62,9 +62,14 @@ namespace Netch.Forms
             CheckUpdateWhenOpenedCheckBox.Checked = Global.Settings.CheckUpdateWhenOpened;
             MinimizeWhenStartedCheckBox.Checked = Global.Settings.MinimizeWhenStarted;
             RunAtStartup.Checked = Global.Settings.RunAtStartup;
+            Redirector2checkBox.Checked = Global.Settings.UseRedirector2;
+            BypassModeCheckBox.Checked = Global.Settings.ProcessBypassMode;
+            EnableStartedTcping_CheckBox.Checked = Global.Settings.StartedTcping;
+            DetectionInterval_TextBox.Text = Global.Settings.StartedTcping_Interval.ToString();
 
             Socks5PortTextBox.Text = Global.Settings.Socks5LocalPort.ToString();
             HTTPPortTextBox.Text = Global.Settings.HTTPLocalPort.ToString();
+            RedirectorTextBox.Text = Global.Settings.RedirectorTCPPort.ToString();
 
             TUNTAPAddressTextBox.Text = Global.Settings.TUNTAP.Address;
             TUNTAPNetmaskTextBox.Text = Global.Settings.TUNTAP.Netmask;
@@ -81,6 +86,11 @@ namespace Netch.Forms
             RunAtStartup.Text = Utils.i18N.Translate(RunAtStartup.Text);
             CheckUpdateWhenOpenedCheckBox.Text = Utils.i18N.Translate(CheckUpdateWhenOpenedCheckBox.Text);
             ProfileCount_Label.Text = Utils.i18N.Translate(ProfileCount_Label.Text);
+            ExperimentalFunction_Label.Text = Utils.i18N.Translate(ExperimentalFunction_Label.Text);
+            DelayTestAfterStartup_Label.Text = Utils.i18N.Translate(DelayTestAfterStartup_Label.Text);
+            EnableStartedTcping_CheckBox.Text = Utils.i18N.Translate(EnableStartedTcping_CheckBox.Text);
+            DetectionInterval_Label.Text = Utils.i18N.Translate(DetectionInterval_Label.Text);
+            DelayTestAfterStartup_Label.Text = Utils.i18N.Translate(DelayTestAfterStartup_Label.Text);
 
             ProfileCount_TextBox.Text = Global.Settings.ProfileCount.ToString();
             STUN_ServerTextBox.Text = Global.Settings.STUN_Server.ToString();
@@ -144,6 +154,9 @@ namespace Netch.Forms
             Global.Settings.CheckUpdateWhenOpened = CheckUpdateWhenOpenedCheckBox.Checked;
             Global.Settings.MinimizeWhenStarted = MinimizeWhenStartedCheckBox.Checked;
             Global.Settings.RunAtStartup = RunAtStartup.Checked;
+            Global.Settings.UseRedirector2 = Redirector2checkBox.Checked;
+            Global.Settings.ProcessBypassMode = BypassModeCheckBox.Checked;
+            Global.Settings.StartedTcping = EnableStartedTcping_CheckBox.Checked;
 
             // 开机自启判断
             TaskSchedulerClass scheduler = new TaskSchedulerClass();
@@ -226,6 +239,27 @@ namespace Netch.Forms
                 return;
             }
 
+            try
+            {
+                var RedirectorPort = int.Parse(RedirectorTextBox.Text);
+
+                if (RedirectorPort > 0 && RedirectorPort < 65536)
+                {
+                    Global.Settings.RedirectorTCPPort = RedirectorPort;
+                }
+                else
+                {
+                    throw new FormatException();
+                }
+            }
+            catch (FormatException)
+            {
+                RedirectorTextBox.Text = Global.Settings.RedirectorTCPPort.ToString();
+                MessageBox.Show(Utils.i18N.Translate("Port value illegal. Try again."), Utils.i18N.Translate("Information"), MessageBoxButtons.OK, MessageBoxIcon.Information);
+
+                return;
+            }
+
             if (AllowDevicesCheckBox.Checked)
             {
                 Global.Settings.LocalAddress = "0.0.0.0";
@@ -271,7 +305,7 @@ namespace Netch.Forms
             {
                 var ProfileCount = int.Parse(ProfileCount_TextBox.Text);
 
-                if (ProfileCount > 0)
+                if (ProfileCount > -1)
                 {
                     Global.Settings.ProfileCount = ProfileCount;
                 }
@@ -310,6 +344,28 @@ namespace Netch.Forms
 
                 return;
             }
+            try
+            {
+                Global.Settings.StartedTcping = EnableStartedTcping_CheckBox.Checked;
+
+                var DetectionInterval = int.Parse(DetectionInterval_TextBox.Text);
+
+                if (DetectionInterval > 0)
+                {
+                    Global.Settings.StartedTcping_Interval = DetectionInterval;
+                }
+                else
+                {
+                    throw new FormatException();
+                }
+            }
+            catch (FormatException)
+            {
+                ProfileCount_TextBox.Text = Global.Settings.ProfileCount.ToString();
+                MessageBox.Show(Utils.i18N.Translate("STUN_ServerPort value illegal. Try again."), Utils.i18N.Translate("Information"), MessageBoxButtons.OK, MessageBoxIcon.Information);
+
+                return;
+            }
 
             Global.Settings.TUNTAP.Address = TUNTAPAddressTextBox.Text;
             Global.Settings.TUNTAP.Netmask = TUNTAPNetmaskTextBox.Text;
@@ -329,5 +385,18 @@ namespace Netch.Forms
             Close();
         }
 
+        private void BypassModeCheckBox_CheckedChanged(object sender, EventArgs e)
+        {
+            if (BypassModeCheckBox.Checked)
+            {
+                Redirector2checkBox.Checked = false;
+                Redirector2checkBox.Enabled = false;
+            }
+            else
+            {
+                Redirector2checkBox.Enabled = true;
+            }
+
+        }
     }
 }

@@ -1,12 +1,17 @@
-﻿using System;
+﻿using Netch.Forms;
+using System;
 using System.Diagnostics;
 using System.IO;
+using System.Runtime.InteropServices;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Netch.Controllers
 {
     public class MainController
     {
+        [DllImport("dnsapi", EntryPoint = "DnsFlushResolverCache")]
+        public static extern UInt32 FlushDNSResolverCache();
         public static Process GetProcess()
         {
             var process = new Process();
@@ -65,6 +70,8 @@ namespace Netch.Controllers
         /// <returns>是否启动成功</returns>
         public bool Start(Models.Server server, Models.Mode mode)
         {
+            FlushDNSResolverCache();
+
             var result = false;
             switch (server.Type)
             {
@@ -117,12 +124,19 @@ namespace Netch.Controllers
                         pNTTController = new NTTController();
                     }
                     // 进程代理模式，启动 NF 控制器
-                    result = pNFController.Start(server, mode);
-
-                    Task.Run(() =>
+                    result = pNFController.Start(server, mode, false);
+                    if (!result)
                     {
-                        pNTTController.Start();
-                    });
+                        MainForm.Instance.StatusText($"{Utils.i18N.Translate("Status")}{Utils.i18N.Translate(": ")}{Utils.i18N.Translate("ReStarting Redirector")}");
+                        Utils.Logging.Info("正常启动失败后尝试停止驱动服务再重新启动");
+                        //正常启动失败后尝试停止驱动服务再重新启动
+                        result = pNFController.Start(server, mode, true);
+                    }
+                    if (result)
+                        Task.Run(() =>
+                        {
+                            pNTTController.Start();
+                        });
 
                 }
                 else if (mode.Type == 1)
@@ -137,11 +151,11 @@ namespace Netch.Controllers
                     }
                     // TUN/TAP 黑名单代理模式，启动 TUN/TAP 控制器
                     result = pTUNTAPController.Start(server, mode);
-
-                    Task.Run(() =>
-                    {
-                        pNTTController.Start();
-                    });
+                    if (result)
+                        Task.Run(() =>
+                        {
+                            pNTTController.Start();
+                        });
                 }
                 else if (mode.Type == 2)
                 {
@@ -155,11 +169,11 @@ namespace Netch.Controllers
                     }
                     // TUN/TAP 白名单代理模式，启动 TUN/TAP 控制器
                     result = pTUNTAPController.Start(server, mode);
-
-                    Task.Run(() =>
-                    {
-                        pNTTController.Start();
-                    });
+                    if (result)
+                        Task.Run(() =>
+                        {
+                            pNTTController.Start();
+                        });
                 }
                 else if (mode.Type == 3 || mode.Type == 5)
                 {
