@@ -1,86 +1,67 @@
-<Project Sdk="Microsoft.NET.Sdk.WindowsDesktop">
-
+﻿<Project Sdk="Microsoft.NET.Sdk">
     <PropertyGroup>
         <OutputType>WinExe</OutputType>
-        <TargetFramework>net48</TargetFramework>
         <UseWindowsForms>true</UseWindowsForms>
         <UseWPF>true</UseWPF>
         <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
         <StartupObject>Netch.Netch</StartupObject>
         <ApplicationManifest>App.manifest</ApplicationManifest>
-        <ApplicationIcon>Netch.ico</ApplicationIcon>
-        <Platforms>x86;x64</Platforms>
-        <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+        <ApplicationIcon>Resources\Netch.ico</ApplicationIcon>
+        <IsPackable>false</IsPackable>
         <LangVersion>latest</LangVersion>
+        <Nullable>enable</Nullable>
+        <NoWarn>VSTHRD100</NoWarn>
+        <EnableNETAnalyzers>false</EnableNETAnalyzers>
+        <AnalysisMode>Default</AnalysisMode>
+        <CodeAnalysisTreatWarningsAsErrors>true</CodeAnalysisTreatWarningsAsErrors>
+    </PropertyGroup>
+
+    <PropertyGroup>
+        <TargetFramework>net5.0-windows</TargetFramework>
+        <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
+        <Configurations>Debug;Release</Configurations>
+        <Platforms>x64</Platforms>
+        <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+        <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
     </PropertyGroup>
 
     <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
         <OutputPath>bin\x64\Debug\</OutputPath>
         <DefineConstants>DEBUG;TRACE</DefineConstants>
-        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-        <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
-        <WarningsAsErrors />
-        <NoWarn />
-    </PropertyGroup>
-
-    <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x86'">
-        <DefineConstants>DEBUG;TRACE</DefineConstants>
-        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-        <NoWarn />
-        <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
-        <WarningsAsErrors />
-        <OutputPath>bin\x86\Debug\</OutputPath>
-    </PropertyGroup>
-
-    <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x86'">
-        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-        <NoWarn />
-        <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
-        <WarningsAsErrors />
-        <OutputPath>bin\x86\Release\</OutputPath>
     </PropertyGroup>
 
     <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-        <NoWarn />
-        <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
-        <WarningsAsErrors />
         <OutputPath>bin\x64\Release\</OutputPath>
+        <DebugType>none</DebugType>
+        <DebugSymbols>false</DebugSymbols>
     </PropertyGroup>
 
     <ItemGroup>
-        <None Remove=".gitignore" />
-    </ItemGroup>
-
-    <ItemGroup>
-        <COMReference Include="TaskScheduler.dll">
-            <Guid>e34cb9f1-c7f7-424c-be29-027dcc09363a</Guid>
-            <VersionMajor>1</VersionMajor>
-            <VersionMinor>0</VersionMinor>
-            <WrapperTool>tlbimp</WrapperTool>
-            <Lcid>0</Lcid>
-            <Isolated>false</Isolated>
-            <EmbedInteropTypes>false</EmbedInteropTypes>
-        </COMReference>
-    </ItemGroup>
-
-    <ItemGroup>
-        <PackageReference Include="DNS" Version="5.0.0" />
-        <PackageReference Include="DnsClient" Version="1.2.0" />
-        <PackageReference Include="ini-parser" Version="2.5.2" />
-        <PackageReference Include="Newtonsoft.Json" Version="12.0.3" />
-        <PackageReference Include="System.Buffers" Version="4.5.0" />
-        <PackageReference Include="WindowsAPICodePack-Shell" Version="1.1.1" />
-    </ItemGroup>
-
-    <ItemGroup>
-      <ProjectReference Include="..\NetchLib\NetchLib.csproj" />
-    </ItemGroup>
-
-    <ItemGroup>
-        <Reference Include="System.Net.Http" />
-        <Reference Include="System.ServiceProcess" />
-        <Reference Include="System.Web" />
+        <PackageReference Include="HMBSbige.SingleInstance" Version="5.0.7" />
+        <PackageReference Include="MaxMind.GeoIP2" Version="4.0.1" />
+        <PackageReference Include="Microsoft.Diagnostics.Tracing.TraceEvent" Version="2.0.70" GeneratePathProperty="true" />
+        <PackageReference Include="Microsoft.VisualStudio.Threading" Version="16.10.56" />
+        <PackageReference Include="Microsoft.Windows.CsWin32" Version="0.1.506-beta">
+          <PrivateAssets>all</PrivateAssets>
+          <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+        <PackageReference Include="Nullable.Extended.Analyzer" Version="1.2.4089">
+          <PrivateAssets>all</PrivateAssets>
+          <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+        <PackageReference Include="Serilog" Version="2.10.0" />
+        <PackageReference Include="Serilog.Extensions.Hosting" Version="4.1.2" />
+        <PackageReference Include="Serilog.Sinks.Async" Version="1.5.0" />
+        <PackageReference Include="Serilog.Sinks.Debug" Version="2.0.0" Condition="'$(Configuration)'=='Debug'" />
+        <PackageReference Include="Serilog.Sinks.File" Version="5.0.0" />
+        <PackageReference Include="System.Drawing.Common" Version="5.0.2" />
+        <PackageReference Include="System.Management" Version="5.0.0" />
+        <PackageReference Include="System.Reactive" Version="5.0.0" />
+        <PackageReference Include="TaskScheduler" Version="2.9.1" />
+        <PackageReference Include="Microsoft-WindowsAPICodePack-Shell" Version="1.1.4" />
+        <PackageReference Include="WindowsFirewallHelper" Version="2.0.4.70-beta2" />
+        <PackageReference Include="System.ServiceProcess.ServiceController" Version="5.0.0" />
+        <PackageReference Include="System.Text.Encoding.CodePages" Version="5.0.0" />
     </ItemGroup>
 
     <ItemGroup>
@@ -94,6 +75,7 @@
             <AutoGen>True</AutoGen>
             <DependentUpon>Settings.settings</DependentUpon>
         </Compile>
+        <Compile Update="Forms\Mode\RouteForm.cs" />
     </ItemGroup>
 
     <ItemGroup>
@@ -109,7 +91,17 @@
             <LastGenOutput>Settings.Designer.cs</LastGenOutput>
         </None>
     </ItemGroup>
-    <Target Condition="'$(VisualStudioDir)' != ''" Name="PostBuild" AfterTargets="PostBuildEvent">
-        <Exec Command="@ECHO OFF&#xD;&#xA;RD /S /Q $(TargetDir)bin &gt; NUL 2&gt;&amp;1&#xD;&#xA;RD /S /Q $(TargetDir)i18n &gt; NUL 2&gt;&amp;1&#xD;&#xA;RD /S /Q $(TargetDir)mode &gt; NUL 2&gt;&amp;1&#xD;&#xA;&#xD;&#xA;MKDIR $(TargetDir)bin &gt; NUL 2&gt;&amp;1&#xD;&#xA;MKDIR $(TargetDir)i18n &gt; NUL 2&gt;&amp;1&#xD;&#xA;MKDIR $(TargetDir)mode &gt; NUL 2&gt;&amp;1&#xD;&#xA;&#xD;&#xA;COPY /Y $(SolutionDir)binaries\$(PlatformName)\* $(TargetDir)bin &gt; NUL 2&gt;&amp;1&#xD;&#xA;COPY /Y $(SolutionDir)binaries\* $(TargetDir)bin &gt; NUL 2&gt;&amp;1&#xD;&#xA;MOVE /Y $(TargetDir)bin\nfapinet.dll $(TargetDir)nfapinet.dll &gt; NUL 2&gt;&amp;1&#xD;&#xA;COPY /Y $(SolutionDir)translations\i18n\* $(TargetDir)i18n &gt; NUL 2&gt;&amp;1&#xD;&#xA;COPY /Y $(SolutionDir)modes\mode\*.txt $(TargetDir)mode &gt; NUL 2&gt;&amp;1&#xD;&#xA;MKDIR $(TargetDir)bin\tap-driver &gt; NUL 2&gt;&amp;1&#xD;&#xA;COPY /Y $(SolutionDir)binaries\$(PlatformName)\tap-driver\* $(TargetDir)bin\tap-driver &gt; NUL 2&gt;&amp;1" />
+
+    <Target Condition="'$(PublishSingleFile)' == 'true'" AfterTargets="_ComputeFilesToBundle" Name="RemoveDupeAssemblies">
+        <ItemGroup>
+            <_FilesToBundle Remove="$(PkgMicrosoft_Diagnostics_Tracing_TraceEvent)\build\native\x86\**" />
+            <!--      .NET 6 SDK fixes MSB4018 "Multiple entries with the same BundleRelativePath", 
+                      if still retain the following properties,
+                      you will encounter a "lib/netstandard2.0/Dial2Lib.dll not found" error
+            -->
+            <_FilesToBundle Remove="$(PkgMicrosoft_Diagnostics_Tracing_TraceEvent)\lib\netstandard1.6\Dia2Lib.dll" />
+            <_FilesToBundle Remove="$(PkgMicrosoft_Diagnostics_Tracing_TraceEvent)\lib\netstandard1.6\OSExtensions.dll" />
+            <_FilesToBundle Remove="$(PkgMicrosoft_Diagnostics_Tracing_TraceEvent)\lib\netstandard1.6\TraceReloggerLib.dll" />
+        </ItemGroup>
     </Target>
 </Project>

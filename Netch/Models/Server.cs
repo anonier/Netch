@@ -1,225 +1,126 @@
 ﻿using System;
-using System.Diagnostics;
-using System.Net;
-using System.Net.Sockets;
+using System.Collections.Generic;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
+using Netch.Utils;
 
 namespace Netch.Models
 {
-    public class Server
+    public abstract class Server : ICloneable
     {
         /// <summary>
-        ///     备注
+        ///     延迟
         /// </summary>
-        public string Remark;
+        [JsonIgnore]
+        public int Delay { get; private set; } = -1;
 
         /// <summary>
         ///     组
         /// </summary>
-        public string Group = "None";
-
-        /// <summary>
-        ///     代理类型（HTTP、HTTPS、Socks5、SS、SSR、VMess）
-        /// </summary>
-        public string Type;
-
-        /// <summary>
-        ///     倍率
-        /// </summary>
-        public double Rate = 1.0;
+        public string Group { get; set; } = Constants.DefaultGroup;
 
         /// <summary>
         ///     地址
         /// </summary>
-        public string Hostname;
+        public string Hostname { get; set; } = string.Empty;
 
         /// <summary>
         ///     端口
         /// </summary>
-        public int Port;
+        public ushort Port { get; set; }
 
         /// <summary>
-        ///     账号（HTTP、HTTPS、Socks5）
+        ///     倍率
         /// </summary>
-        public string Username;
+        public double Rate { get; } = 1.0;
 
         /// <summary>
-        ///     密码（HTTP、HTTPS、Socks5、SS、SSR）
+        ///     备注
         /// </summary>
-        public string Password;
+        public string Remark { get; set; } = "";
 
         /// <summary>
-        ///		用户 ID（VMess）
+        ///     代理类型
         /// </summary>
-        public string UserID = string.Empty;
+        public virtual string Type { get; } = string.Empty;
 
-        /// <summary>
-        ///		额外 ID（VMess）
-        /// </summary>
-        public int AlterID = 0;
+        [JsonExtensionData]
+        // ReSharper disable once CollectionNeverUpdated.Global
+        public Dictionary<string, object> ExtensionData { get; set; } = new();
 
-        /// <summary>
-        ///     加密方式（SS、SSR、VMess）
-        /// </summary>
-        public string EncryptMethod;
-
-        /// <summary>
-        ///     插件（SS）
-        /// </summary>
-        public string Plugin;
-
-        /// <summary>
-        ///     插件参数（SS）
-        /// </summary>
-        public string PluginOption;
-
-        /// <summary>
-        ///     协议（SSR）
-        /// </summary>
-        public string Protocol;
-
-        /// <summary>
-        ///     协议参数（SSR）
-        /// </summary>
-        public string ProtocolParam;
-
-        /// <summary>
-        ///     混淆（SSR）
-        /// </summary>
-        public string OBFS;
-
-        /// <summary>
-        ///     混淆参数（SSR）
-        /// </summary>
-        public string OBFSParam;
-
-        /// <summary>
-        ///		传输协议（VMess）
-        /// </summary>
-        public string TransferProtocol = "tcp";
-
-        /// <summary>
-        ///		伪装类型（VMess）
-        /// </summary>
-        public string FakeType = string.Empty;
-
-        /// <summary>
-        ///		伪装域名（VMess：HTTP、WebSocket、HTTP/2）
-        /// </summary>
-        public string Host = string.Empty;
-
-        /// <summary>
-        ///		传输路径（VMess：WebSocket、HTTP/2）
-        /// </summary>
-        public string Path = string.Empty;
-
-        /// <summary>
-        ///		QUIC 加密方式（VMess）
-        /// </summary>
-        public string QUICSecure = "none";
-
-        /// <summary>
-        ///		QUIC 加密密钥（VMess）
-        /// </summary>
-        public string QUICSecret = string.Empty;
-
-        /// <summary>
-        ///		TLS 底层传输安全（VMess）
-        /// </summary>
-        public bool TLSSecure = false;
-
-        /// <summary>
-        ///		Mux 多路复用（VMess）
-        /// </summary>
-        public bool UseMux = false;
-
-        /// <summary>
-        ///     延迟
-        /// </summary>
-        public int Delay = -1;
-
-        /// <summary>
-		///		获取备注
-		/// </summary>
-		/// <returns>备注</returns>
-		public override string ToString()
+        public object Clone()
         {
-            if (string.IsNullOrWhiteSpace(Remark))
-            {
-                Remark = $"{Hostname}:{Port}";
-            }
-
-            switch (Type)
-            {
-                case "Socks5":
-                    return $"[S5] {Remark}";
-                case "SS":
-                    return $"[SS] {Remark}";
-                case "SSR":
-                    return $"[SR] {Remark}";
-                case "VMess":
-                    return $"[V2] {Remark}";
-                default:
-                    return "WTF";
-            }
+            return MemberwiseClone();
         }
 
         /// <summary>
-        ///		测试延迟
+        ///     获取备注
+        /// </summary>
+        /// <returns>备注</returns>
+        public override string ToString()
+        {
+            var remark = string.IsNullOrWhiteSpace(Remark) ? $"{Hostname}:{Port}" : Remark;
+
+            var shortName = Type.IsNullOrEmpty() ? "WTF" : ServerHelper.GetUtilByTypeName(Type).ShortName;
+
+            return $"[{shortName}][{Group}] {remark}";
+        }
+
+        public abstract string MaskedData();
+
+        /// <summary>
+        ///     测试延迟
         /// </summary>
         /// <returns>延迟</returns>
-        public int Test()
+        public async Task<int> PingAsync()
         {
             try
             {
-                var destination = Utils.DNS.Lookup(Hostname);
+                var destination = await DnsUtils.LookupAsync(Hostname);
                 if (destination == null)
-                {
                     return Delay = -2;
-                }
 
                 var list = new Task<int>[3];
                 for (var i = 0; i < 3; i++)
                 {
-                    list[i] = Task.Run(() =>
+                    async Task<int> PingCoreAsync()
                     {
                         try
                         {
-                            using (var client = new Socket(SocketType.Stream, ProtocolType.Tcp))
-                            {
-                                var watch = new Stopwatch();
-                                watch.Start();
-
-                                var task = client.BeginConnect(new IPEndPoint(destination, Port), result =>
-                                {
-                                    watch.Stop();
-                                }, 0);
-
-                                if (task.AsyncWaitHandle.WaitOne(1000))
-                                {
-                                    return (int)watch.ElapsedMilliseconds;
-                                }
-
-                                return 1000;
-                            }
+                            return Global.Settings.ServerTCPing
+                                ? await Utils.Utils.TCPingAsync(destination, Port)
+                                : await Utils.Utils.ICMPingAsync(destination);
                         }
                         catch (Exception)
                         {
                             return -4;
                         }
-                    });
+                    }
+
+                    list[i] = PingCoreAsync();
                 }
 
-                Task.WaitAll(list);
+                var resTask = await Task.WhenAny(list[0], list[1], list[2]);
 
-                var min = Math.Min(list[0].Result, list[1].Result);
-                min = Math.Min(min, list[2].Result);
-                return Delay = min;
+                return Delay = await resTask;
             }
             catch (Exception)
             {
                 return Delay = -4;
             }
+        }
+    }
+
+    public static class ServerExtension
+    {
+        public static async Task<string> AutoResolveHostnameAsync(this Server server)
+        {
+            return Global.Settings.ResolveServerHostname ? (await DnsUtils.LookupAsync(server.Hostname))!.ToString() : server.Hostname;
+        }
+
+        public static bool IsInGroup(this Server server)
+        {
+            return server.Group is not Constants.DefaultGroup;
         }
     }
 }

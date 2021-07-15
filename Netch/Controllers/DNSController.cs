@@ -1,112 +1,35 @@
-﻿using Netch.Forms;
-using System;
-using System.Diagnostics;
+﻿using System;
 using System.IO;
-using System.Net;
-using System.Threading;
+using System.Threading.Tasks;
+using Netch.Interfaces;
+using static Netch.Interops.AioDNS;
 
 namespace Netch.Controllers
 {
-    public class DNSController
+    public class DNSController : IController
     {
-        /// <summary>
-        ///		进程实例
-        /// </summary>
-        public Process Instance;
+        public string Name => "DNS Service";
 
-        /// <summary>
-        /// 启动NatTypeTester
-        /// </summary>
-        /// <returns></returns>
-        public bool Start()
+        public async Task StopAsync()
         {
-            MainForm.Instance.StatusText($"{Utils.i18N.Translate("Starting dns2tcp Service")}");
-            try
-            {
-                if (!File.Exists("bin\\dns2tcp.exe"))
-                {
-                    return false;
-                }
-
-                Instance = MainController.GetProcess();
-                Instance.StartInfo.FileName = "bin\\dns2tcp.exe";
-
-                Instance.StartInfo.Arguments = " -L 127.0.0.1:53 -R 1.1.1.1:53";
-
-                Instance.OutputDataReceived += OnOutputDataReceived;
-                Instance.ErrorDataReceived += OnOutputDataReceived;
-
-                Instance.Start();
-                Instance.BeginOutputReadLine();
-                Instance.BeginErrorReadLine();
-                return true;
-            }
-            catch (Exception)
-            {
-                Utils.Logging.Info("dns2tcp 进程出错");
-                Stop();
-                return false;
-            }
+            await FreeAsync();
         }
 
-        /// <summary>
-        ///		停止
-        /// </summary>
-        public void Stop()
+        public async Task StartAsync()
         {
-            try
-            {
-                if (Instance != null && !Instance.HasExited)
-                {
-                    Instance.Kill();
-                }
-            }
-            catch (Exception e)
-            {
-                Utils.Logging.Info(e.ToString());
-            }
+            MainController.PortCheck(Global.Settings.AioDNS.ListenPort, "DNS");
+
+            var aioDnsConfig = Global.Settings.AioDNS;
+            var listenAddress = Global.Settings.LocalAddress;
+
+            Dial(NameList.TYPE_REST, "");
+            Dial(NameList.TYPE_ADDR, $"{listenAddress}:{aioDnsConfig.ListenPort}");
+            Dial(NameList.TYPE_LIST, Path.GetFullPath(Constants.AioDnsRuleFile));
+            Dial(NameList.TYPE_CDNS, $"{aioDnsConfig.ChinaDNS}");
+            Dial(NameList.TYPE_ODNS, $"{aioDnsConfig.OtherDNS}");
+
+            if (!await InitAsync())
+                throw new Exception("AioDNS start failed.");
         }
-
-        public void OnOutputDataReceived(object sender, DataReceivedEventArgs e)
-        {
-            if (!string.IsNullOrWhiteSpace(e.Data))
-            {
-                if (File.Exists("logging\\dns2tcp.log"))
-                {
-                    File.Delete("logging\\dns2tcp.log");
-                }
-                File.AppendAllText("logging\\dns2tcp.log", $"{e.Data}\r\n");
-            }
-        }
-
-       /* public static DNS.Server.DnsServer Server = new DNS.Server.DnsServer(new Resolver());
-
-        public bool Start()
-        {
-            MainForm.Instance.StatusText($"{Utils.i18N.Translate("Status")}{Utils.i18N.Translate(": ")}{Utils.i18N.Translate("Starting LocalDns service")}");
-            try
-            {
-                _ = Server.Listen(new IPEndPoint(IPAddress.IPv6Any, 53));
-            }
-            catch (Exception e)
-            {
-                Utils.Logging.Info(e.ToString());
-                return false;
-            }
-
-            return true;
-        }
-
-        public void Stop()
-        {
-            try
-            {
-                Server.Dispose();
-            }
-            catch (Exception e)
-            {
-                Utils.Logging.Info(e.ToString());
-            }
-        }*/
     }
 }

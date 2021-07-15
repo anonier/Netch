@@ -1,87 +1,112 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Diagnostics;
-using System.Net.Http;
+using System.Linq;
+using System.Net;
+using System.Text;
+using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Netch.Models.GitHubRelease;
-using Newtonsoft.Json;
+using Netch.Utils;
+using Serilog;
 
 namespace Netch.Controllers
 {
-    public class UpdateChecker
+    public static class UpdateChecker
     {
-        private const string DefaultUserAgent = @"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.70 Safari/537.36";
-
-        private const int DefaultGetTimeout = 30000;
-
-        private const string Owner = @"NetchX";
-        private const string Repo = @"Netch";
-
-        public string LatestVersionNumber;
-        public string LatestVersionUrl;
-
-        public event EventHandler NewVersionFound;
-        public event EventHandler NewVersionFoundFailed;
-        public event EventHandler NewVersionNotFound;
+        public const string Owner = @"NetchX";
+        public const string Repo = @"Netch";
 
         public const string Name = @"Netch";
-        public const string Copyright = @"Copyright © 2019 - 2020";
-        public const string Version = @"1.4.1";
+        public const string Copyright = @"Copyright © 2019 - 2021";
 
-        public async void Check(bool notifyNoFound, bool isPreRelease)
+        public const string AssemblyVersion = @"1.8.7";
+        private const string Suffix = @"";
+
+        public static readonly string Version = $"{AssemblyVersion}{(string.IsNullOrEmpty(Suffix) ? "" : $"-{Suffix}")}";
+
+        public static Release LatestRelease = null!;
+
+        public static string LatestVersionNumber => LatestRelease.tag_name;
+
+        public static string LatestVersionUrl => LatestRelease.html_url;
+
+        public static event EventHandler? NewVersionFound;
+
+        public static event EventHandler? NewVersionFoundFailed;
+
+        public static event EventHandler? NewVersionNotFound;
+
+        public static async Task CheckAsync(bool isPreRelease)
         {
             try
             {
                 var updater = new GitHubRelease(Owner, Repo);
                 var url = updater.AllReleaseUrl;
 
-                var json = await GetAsync(url, true);
+                var (_, json) = await WebUtil.DownloadStringAsync(WebUtil.CreateRequest(url));
 
-                var releases = JsonConvert.DeserializeObject<List<Release>>(json);
-                var latestRelease = VersionUtil.GetLatestRelease(releases, isPreRelease);
-                if (VersionUtil.CompareVersion(latestRelease.tag_name, Version) > 0)
+                var releases = JsonSerializer.Deserialize<List<Release>>(json)!;
+                LatestRelease = GetLatestRelease(releases, isPreRelease);
+                Log.Information("Github 最新发布版本: {Version}", LatestRelease.tag_name);
+                if (VersionUtil.CompareVersion(LatestRelease.tag_name, Version) > 0)
                 {
-                    LatestVersionNumber = latestRelease.tag_name;
-                    LatestVersionUrl = latestRelease.html_url;
-                    NewVersionFound?.Invoke(this, new EventArgs());
+                    Log.Information("发现新版本");
+                    NewVersionFound?.Invoke(null, EventArgs.Empty);
                 }
                 else
                 {
-                    LatestVersionNumber = latestRelease.tag_name;
-                    if (notifyNoFound)
-                    {
-                        NewVersionNotFound?.Invoke(this, new EventArgs());
-                    }
+                    Log.Information("目前是最新版本");
+                    NewVersionNotFound?.Invoke(null, EventArgs.Empty);
                 }
             }
             catch (Exception e)
             {
-                Debug.WriteLine(e.Message);
-                if (notifyNoFound)
-                {
-                    NewVersionFoundFailed?.Invoke(this, new EventArgs());
-                }
+                if (e is WebException)
+                    Log.Warning(e, "获取新版本失败");
+                else
+                    Log.Error(e, "获取新版本异常");
+
+                NewVersionFoundFailed?.Invoke(null, EventArgs.Empty);
             }
         }
 
-        private static async Task<string> GetAsync(string url, bool useProxy, string userAgent = @"", double timeout = DefaultGetTimeout)
+        public static (string fileName, string sha256) GetLatestUpdateFileNameAndHash(string? keyword = null)
         {
-            var httpClientHandler = new HttpClientHandler
-            {
-                UseProxy = useProxy
-            };
-            var httpClient = new HttpClient(httpClientHandler)
-            {
-                Timeout = TimeSpan.FromMilliseconds(timeout)
-            };
-            var request = new HttpRequestMessage(HttpMethod.Get, url);
-            request.Headers.Add(@"User-Agent", string.IsNullOrWhiteSpace(userAgent) ? DefaultUserAgent : userAgent);
+            var matches = Regex.Matches(LatestRelease.body, @"^\| (?<filename>.*) \| (?<sha256>.*) \|\r?$", RegexOptions.Multiline).Skip(2);
+            /*
+              Skip(2)
+              
+              | 文件名 | SHA256 |
+              | :- | :- |
+           */
 
-            var response = await httpClient.SendAsync(request);
+            Match match = keyword == null ? matches.First() : matches.First(m => m.Groups["filename"].Value.Contains(keyword));
 
-            response.EnsureSuccessStatusCode();
-            var resultStr = await response.Content.ReadAsStringAsync();
-            return resultStr;
+            return (match.Groups["filename"].Value, match.Groups["sha256"].Value);
+        }
+
+        public static string GetLatestReleaseContent()
+        {
+            var sb = new StringBuilder();
+            foreach (string l in LatestRelease.body.GetLines(false).SkipWhile(l => l.FirstOrDefault() != '#'))
+            {
+                if (l.Contains("校验和"))
+                    break;
+
+                sb.AppendLine(l);
+            }
+
+            return sb.ToString();
+        }
+
+        private static Release GetLatestRelease(IEnumerable<Release> releases, bool isPreRelease)
+        {
+            if (!isPreRelease)
+                releases = releases.Where(release => !release.prerelease);
+
+            var ordered = releases.OrderByDescending(release => release.tag_name, new VersionUtil.VersionComparer());
+            return ordered.ElementAt(0);
         }
     }
 }
